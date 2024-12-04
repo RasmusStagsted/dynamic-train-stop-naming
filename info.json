@@ -1,0 +1,9 @@
+{
+  "name": "dynamic-train-stop-naming",
+  "version": "0.1.4",
+  "title": "Dynamic Train Stop Naming",
+  "author": "Stagsted",
+  "factorio_version": "2.0",
+  "dependencies": ["base >= 2.0"],
+  "description": "A mod for dynamically naming train stops, using the red circuit signals."
+}
