@@ -4,6 +4,14 @@ script.on_init(
   end
 )
 
+script.on_load(
+  function()
+	if not storage.dynamicTrainStopSettings then
+	  storage.dynamicTrainStopSettings = {}
+	end
+  end
+)
+
 script.on_event(defines.events.on_player_mined_entity,
   function(event)
 	storage.dynamicTrainStopSettings[event.entity.unit_number] = nil
