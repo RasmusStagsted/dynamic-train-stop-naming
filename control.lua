@@ -1,108 +1,103 @@
 script.on_init(
   function()
-    log("On init")
-    if not storage.train_stop_list then
-      log("Initializing train_stop_list")
-      storage.train_stop_list = {}
-    end
-    log("Train stop count: " .. #storage.train_stop_list)
+    storage.dynamicTrainStopSettings = {}
   end
-)
-
-script.on_event(defines.events.on_tick,
-  function(event)
-    if not storage.train_stop_list then
-      storage.train_stop_list = {}
-    end
-    if event.tick % 60 == 0 then
-        log("Persisted train stop count: " .. #storage.train_stop_list)
-    end
-end)
-
-script.on_event(defines.events.on_built_entity,
-  function(event)
-    log("Train stop added.")
-    table.insert(storage.train_stop_list, event.entity)
-  end,
-  {{filter = "name", name = "train-stop"}}
-)
-
-script.on_event(defines.events.on_robot_built_entity,
-  function(event)
-    log("Train stop added.")
-    table.insert(storage.train_stop_list, event.entity)
-  end,
-  {{filter = "name", name = "train-stop"}}
 )
 
 script.on_event(defines.events.on_player_mined_entity,
   function(event)
-    log("Train stop removed.")
-    remove_entity_from_list(event.entity, storage.train_stop_list)
+	storage.dynamicTrainStopSettings[event.entity.unit_number] = nil
   end,
   {{filter = "name", name = "train-stop"}}
 )
 
 script.on_event(defines.events.on_robot_mined_entity,
   function(event)
-    log("Train stop removed.")
-    remove_entity_from_list(event.entity, storage.train_stop_list)
+	storage.dynamicTrainStopSettings[event.entity.unit_number] = nil
   end,
   {{filter = "name", name = "train-stop"}}
 )
 
-script.on_event(defines.events.on_tick,
+script.on_event(defines.events.on_entity_renamed,
   function(event)
-    storage.train_stop_list = storage.train_stop_list or {}
-    for i, train_stop in ipairs(storage.train_stop_list) do
-      local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_red)
-      if network then
-        local signals = network.signals
-        signals = remove_expected_control_signals(train_stop, signals)
-        set_train_stop_name(train_stop, signals)
-
-      end
-    end
+	if event.by_script or event.entity.type ~= 'train-stop' then
+		return
+	end
+	if not storage.dynamicTrainStopSettings[event.entity.unit_number] then 
+		initDynamicTrainStopSettings(event.entity.unit_number, event.entity.backer_name)
+	else 
+		storage.dynamicTrainStopSettings[event.entity.unit_number].name = event.entity.backer_name
+	end
   end
 )
 
-function generate_train_stop_list()
-  storage.train_stop_list = storage.train_stop_list or {}
-  for _, surface in pairs(game.surfaces) do
-    local train_stops = surface.find_entities_filtered({type = "train-stop"})
-    for _, stop in pairs(train_stops) do
-      table.insert(storage.train_stop_list, stop)
-    end
+script.on_event(defines.events.on_tick,
+  function(event)  
+    for trainStopUn, trainStopSetting in pairs(storage.dynamicTrainStopSettings) do
+	  local train_stop = game.get_entity_by_unit_number(trainStopUn)
+	  if train_stop then
+		  if trainStopSetting.useGreen then 
+			local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_green)
+			if network then
+				updateTrainStopSettingName(trainStopSetting, network, train_stop, true)
+			end
+		  end
+		  if trainStopSetting.useRed then 
+			local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_red)
+			if network then
+				updateTrainStopSettingName(trainStopSetting, network, train_stop, false)
+			end
+		  end
+		  updateName(trainStopSetting, train_stop)
+	  end
+	end
   end
+)
+
+
+function updateTrainStopSettingName(trainStopSetting, network, train_stop, green)
+	local signals = network.signals
+	signals = remove_expected_control_signals(train_stop, signals)
+	local signalName = ""
+	if signals then
+		for _, signal in ipairs(signals) do
+		  local signal = signal.signal
+		  local pre_fix = nil
+		  if signal.name == "solar-system-edge" then
+			pre_fix = "space-location"
+		  elseif signal.type == "virtual" then
+			pre_fix = "virtual-signal"
+		  elseif signal.type == "space-location" then
+			pre_fix = "planet"
+		  elseif signal.type == nil then
+			pre_fix = "item"
+		  else
+			pre_fix = signal.type
+		  end
+		  
+		  if not pre_fix then
+			signalName = signalName .. signal.name
+		  else
+			signalName = signalName .. "[" .. pre_fix .. "=" .. signal.name .. "]"
+		  end
+	    end
+    end
+	if green then		
+		if trainStopSetting.greenName ~= signalName then
+			trainStopSetting.greenName = signalName
+		end
+	else 
+		if trainStopSetting.redName ~= signalName then
+			trainStopSetting.redName = signalName
+		end
+	end
 end
 
-function set_train_stop_name(train_stop, signals)
-  if signals then
-    local new_name = ""
-    for index, signal in ipairs(signals) do
-      signal = signal.signal
-      local pre_fix = nil
-      if signal.name == "solar-system-edge" then
-          pre_fix = "space-location"
-      elseif signal.type == "virtual" then
-          pre_fix = "virtual-signal"
-      elseif signal.type == "space-location" then
-          pre_fix = "planet"
-      elseif signal.type == nil then
-          pre_fix = "item"
-      else
-          pre_fix = signal.type
-      end
-      if not pre_fix then
-          new_name = new_name .. signal.name
-      else
-        new_name = new_name .. "[" .. pre_fix .. "=" .. signal.name .. "]"
-      end
-    end
-    if not (train_stop.backer_name == new_name) then
-      train_stop.backer_name = new_name
-    end
-  end
+function updateName(trainStopSetting, train_stop) 
+	local newName = trainStopSetting.redName..trainStopSetting.greenName..trainStopSetting.name
+	if  newName ~= train_stop.backer_name then
+		train_stop.backer_name = newName
+	end
 end
 
 function remove_signal(signals, signal)
@@ -114,12 +109,14 @@ function remove_signal(signals, signal)
   end
 end
 
+
 function remove_expected_control_signals(train_stop, signals)
 
   -- Remove signal from list, used for train stop enable/disable
   local control_behavior = train_stop.get_control_behavior()
   if (control_behavior.circuit_enable_disable) then
-    if (control_behavior.circuit_condition.condition) then -- This will never become true! Why?
+	local condition = control_behavior.circuit_condition
+    if (condition.first_signal) then
       remove_signal(signals, condition.first_signal)
       if (condition.second_signal) then
         remove_signal(signals, condition.second_signal)
@@ -150,76 +147,122 @@ function remove_expected_control_signals(train_stop, signals)
   return signals
 end
 
-function remove_entity_from_list(entity, list)
-  for i, val in ipairs(list) do
-    if val == entity then
-      table.remove(list, i)
-      break
-    end
-  end
+function initDynamicTrainStopSettings(unit_number, name) 
+	--game.players[1].print("init: "..unit_number.." "..name)
+	storage.dynamicTrainStopSettings[unit_number] = {
+		useRed = false,
+		useGreen = false,
+		redName = "",
+		greenName = "",
+		name = name
+	}
 end
 
-
---[[
-script.on_load(
-  function()
-    generate_train_stop_list()
+script.on_event(defines.events.on_gui_checked_state_changed, 
+  function(event)
+	local player = game.players[event.player_index]
+	local opened = player.opened
+	local checkbox = event.element
+    if checkbox.name == "dynamicTrainStopRed" then 
+	  if not storage.dynamicTrainStopSettings[player.opened.unit_number] then
+		initDynamicTrainStopSettings(player.opened.unit_number, "")
+	  end
+	  storage.dynamicTrainStopSettings[player.opened.unit_number].useRed = checkbox.state
+	  if not checkbox.state then
+		storage.dynamicTrainStopSettings[player.opened.unit_number].redName = ""
+	  end
+    end
+	if checkbox.name == "dynamicTrainStopGreen" then 
+	  if not storage.dynamicTrainStopSettings[player.opened.unit_number] then
+		initDynamicTrainStopSettings(player.opened.unit_number, "")
+	  end
+	  storage.dynamicTrainStopSettings[player.opened.unit_number].useGreen = checkbox.state
+	  if not checkbox.state then
+		storage.dynamicTrainStopSettings[player.opened.unit_number].greenName = ""
+	  end
+    end
   end
 )
 
-script.on_init(
-  function()
-    generate_train_stop_list()
-  end
-)
-]]--
-
-
---[[
 script.on_event(
   defines.events.on_gui_opened,
   function(event)
     if event.entity == nil then
       return
     end
+	
     if event.entity.type == 'train-stop' then
-      local player = game.players[event.player_index]
-      gui = player.gui.children.center
-      if gui.turret_wrap then
+	  local player = game.players[event.player_index]
+	  if not storage.dynamicTrainStopSettings[player.opened.unit_number] then
+		initDynamicTrainStopSettings(player.opened.unit_number, player.opened.backer_name) 
+	  end
+	  local trainStopSetting = storage.dynamicTrainStopSettings[player.opened.unit_number]
+	  -- DEBUG
+	  --player.print(tostring(trainStopSetting.useRed).." : "
+	  --		..tostring(trainStopSetting.useGreen).."   "
+	  --		..tostring(trainStopSetting.redName).." - "
+	  --		..tostring(trainStopSetting.greenName).." - "
+	  --		..tostring(trainStopSetting.name).." : "
+	  --)
+	  
+	  local anchor = {
+		gui = defines.relative_gui_type.train_stop_gui, 
+		position = defines.relative_gui_position.right
+	  }
+      local gui = player.gui.relative
+	  
+      if gui.train_stop then
+		gui.train_stop.controls_flow_v.controls_flow_red.dynamicTrainStopRed.state = trainStopSetting.useRed;
+		gui.train_stop.controls_flow_v.controls_flow_green.dynamicTrainStopGreen.state = trainStopSetting.useGreen;
         return
       end
-      gui.add({
+	 
+      local frame = gui.add({
         type = "frame",
-        name = "turret_wrap",
-        direction = "horizontal",
-        style = "trainstopgui"
-      })
-
-      gui.turret_wrap.add({
-        type = "frame",
-        name = "button_f",
-        direction = "vertical"
-      })
-		  
-      gui.turret_wrap.add({
-        type = "flow",
-        name = "textFlow",
+        name = "train_stop",
         direction = "vertical",
-        style = "textlabel_flow"
+		caption="Dynamic Naming",
+		anchor = anchor
       })
-
-      gui.turret_wrap.button_f.add({
-        type = "radiobutton",
-        state = true
+	  local controls_flow_v = frame.add {
+		type="flow", 
+		name="controls_flow_v", 
+		direction="vertical"
+	  }
+	  
+	  local controls_flow_red = controls_flow_v.add {
+		type="flow", 
+		name="controls_flow_red", 
+		direction="horizontal"	  
+	  }
+	  controls_flow_red.add({
+        type = "checkbox",
+		name = "dynamicTrainStopRed",
+        state = trainStopSetting.useRed
       })
-
-      gui.turret_wrap.textFlow.add({
+      controls_flow_red.add({
         type = "label",
-        name = "test",
-        caption = "test2"
+        name = "redLabel",
+		caption = "Use Red Circuit",
+        tooltip = "Puts all signals from the red circuit into at the beginning of the name of the train stop."
       })
 
-      --gui.add(type = "radiobutton", name = "enable-dynamic-name-control", caption = "Enable dynamic name control", state = true)
+	  local controls_flow_green = controls_flow_v.add {
+		type="flow", 
+		name="controls_flow_green", 
+		direction="horizontal"	  
+	  }
+	  controls_flow_green.add({
+        type = "checkbox",
+		name = "dynamicTrainStopGreen",
+        state = trainStopSetting.useGreen
+      })
+      controls_flow_green.add({
+        type = "label",
+		name = "greenLabel",
+        caption = "Use Green Circuit",
+        tooltip = "Puts all signals from the green circuit into at the beginning of the name of the train stop."
+      })
     end
   end
 )
@@ -235,13 +278,12 @@ script.on_event(
       if player == nil then
         return
       end
-		  local gui = player.gui.center
-		  if not gui.turret_wrap then
+	  local gui = player.gui.center
+	  if not gui.train_stop then
         return  
-		  end
-		
-		  gui.turret_wrap.destroy()
+	  end
+	  gui.train_stop.destroy()
     end
   end
 )
-]]--
+
