@@ -1,111 +1,111 @@
+-- only called once the first time the mod loads on a given save
 script.on_init(
   function()
-    storage.dynamicTrainStopSettings = {}
+    storage.dynamic_train_stop_settings = {}
   end
 )
 
-script.on_load(
+-- called when any mod version or game version changed
+script.on_configuration_changed(
   function()
-	if not storage.dynamicTrainStopSettings then
-	  storage.dynamicTrainStopSettings = {}
-	end
+    -- create the storage variable for save games with old versions of this mod
+    if not storage.dynamic_train_stop_settings then
+      storage.dynamic_train_stop_settings = {}
+    end
   end
 )
 
+-- remove settings for no longer existing train stops.
 script.on_event(defines.events.on_player_mined_entity,
   function(event)
-	storage.dynamicTrainStopSettings[event.entity.unit_number] = nil
+    storage.dynamic_train_stop_settings[event.entity.unit_number] = nil
   end,
-  {{filter = "name", name = "train-stop"}}
+  { { filter = "name", name = "train-stop" } }
 )
 
+-- remove settings for no longer existing train stops.
 script.on_event(defines.events.on_robot_mined_entity,
   function(event)
-	storage.dynamicTrainStopSettings[event.entity.unit_number] = nil
+    storage.dynamic_train_stop_settings[event.entity.unit_number] = nil
   end,
-  {{filter = "name", name = "train-stop"}}
+  { { filter = "name", name = "train-stop" } }
 )
 
 script.on_event(defines.events.on_entity_renamed,
   function(event)
-	if event.by_script or event.entity.type ~= 'train-stop' then
-		return
-	end
-	if not storage.dynamicTrainStopSettings[event.entity.unit_number] then 
-		initDynamicTrainStopSettings(event.entity.unit_number, event.entity.backer_name)
-	else 
-		storage.dynamicTrainStopSettings[event.entity.unit_number].name = event.entity.backer_name
-	end
+    if event.by_script or event.entity.type ~= 'train-stop' then
+      return
+    end
+    storage.dynamic_train_stop_settings[event.entity.unit_number].name = event.entity.backer_name
   end
 )
 
 script.on_event(defines.events.on_tick,
-  function(event)  
-    for trainStopUn, trainStopSetting in pairs(storage.dynamicTrainStopSettings) do
-	  local train_stop = game.get_entity_by_unit_number(trainStopUn)
-	  if train_stop then
-		  if trainStopSetting.useGreen then 
-			local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_green)
-			if network then
-				updateTrainStopSettingName(trainStopSetting, network, train_stop, true)
-			end
-		  end
-		  if trainStopSetting.useRed then 
-			local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_red)
-			if network then
-				updateTrainStopSettingName(trainStopSetting, network, train_stop, false)
-			end
-		  end
-		  updateName(trainStopSetting, train_stop)
-	  end
-	end
+  function(event)
+    for train_stop_un, train_stop_setting in pairs(storage.dynamic_train_stop_settings) do
+      local train_stop = game.get_entity_by_unit_number(train_stop_un)
+      if train_stop then
+        if train_stop_setting.use_green then
+          local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_green)
+          if network then
+            update_train_stop_setting_from_signals(train_stop_setting, network, train_stop, true)
+          end
+        end
+        if train_stop_setting.use_red then
+          local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_red)
+          if network then
+            update_train_stop_setting_from_signals(train_stop_setting, network, train_stop, false)
+          end
+        end
+        update_train_stop_name_from_settings(train_stop_setting, train_stop)
+      end
+    end
   end
 )
 
+function update_train_stop_setting_from_signals(train_stop_setting, network, train_stop, green)
+  local signals = network.signals
+  signals = remove_expected_control_signals(train_stop, signals)
+  local signal_name = ""
+  if signals then
+    for _, signal in ipairs(signals) do
+      local signal = signal.signal
+      local pre_fix = nil
+      if signal.name == "solar-system-edge" then
+        pre_fix = "space-location"
+      elseif signal.type == "virtual" then
+        pre_fix = "virtual-signal"
+      elseif signal.type == "space-location" then
+        pre_fix = "planet"
+      elseif signal.type == nil then
+        pre_fix = "item"
+      else
+        pre_fix = signal.type
+      end
 
-function updateTrainStopSettingName(trainStopSetting, network, train_stop, green)
-	local signals = network.signals
-	signals = remove_expected_control_signals(train_stop, signals)
-	local signalName = ""
-	if signals then
-		for _, signal in ipairs(signals) do
-		  local signal = signal.signal
-		  local pre_fix = nil
-		  if signal.name == "solar-system-edge" then
-			pre_fix = "space-location"
-		  elseif signal.type == "virtual" then
-			pre_fix = "virtual-signal"
-		  elseif signal.type == "space-location" then
-			pre_fix = "planet"
-		  elseif signal.type == nil then
-			pre_fix = "item"
-		  else
-			pre_fix = signal.type
-		  end
-		  
-		  if not pre_fix then
-			signalName = signalName .. signal.name
-		  else
-			signalName = signalName .. "[" .. pre_fix .. "=" .. signal.name .. "]"
-		  end
-	    end
+      if not pre_fix then
+        signal_name = signal_name .. signal.name
+      else
+        signal_name = signal_name .. "[" .. pre_fix .. "=" .. signal.name .. "]"
+      end
     end
-	if green then		
-		if trainStopSetting.greenName ~= signalName then
-			trainStopSetting.greenName = signalName
-		end
-	else 
-		if trainStopSetting.redName ~= signalName then
-			trainStopSetting.redName = signalName
-		end
-	end
+  end
+  if green then
+    if train_stop_setting.green_name ~= signal_name then
+      train_stop_setting.green_name = signal_name
+    end
+  else
+    if train_stop_setting.red_name ~= signal_name then
+      train_stop_setting.red_name = signal_name
+    end
+  end
 end
 
-function updateName(trainStopSetting, train_stop) 
-	local newName = trainStopSetting.redName..trainStopSetting.greenName..trainStopSetting.name
-	if  newName ~= train_stop.backer_name then
-		train_stop.backer_name = newName
-	end
+function update_train_stop_name_from_settings(train_stop_setting, train_stop)
+  local new_name = train_stop_setting.red_name .. train_stop_setting.green_name .. train_stop_setting.name
+  if new_name ~= train_stop.backer_name then
+    train_stop.backer_name = new_name
+  end
 end
 
 function remove_signal(signals, signal)
@@ -117,13 +117,12 @@ function remove_signal(signals, signal)
   end
 end
 
-
 function remove_expected_control_signals(train_stop, signals)
 
   -- Remove signal from list, used for train stop enable/disable
   local control_behavior = train_stop.get_control_behavior()
   if (control_behavior.circuit_enable_disable) then
-	local condition = control_behavior.circuit_condition
+    local condition = control_behavior.circuit_condition
     if (condition.first_signal) then
       remove_signal(signals, condition.first_signal)
       if (condition.second_signal) then
@@ -155,39 +154,37 @@ function remove_expected_control_signals(train_stop, signals)
   return signals
 end
 
-function initDynamicTrainStopSettings(unit_number, name) 
-	--game.players[1].print("init: "..unit_number.." "..name)
-	storage.dynamicTrainStopSettings[unit_number] = {
-		useRed = false,
-		useGreen = false,
-		redName = "",
-		greenName = "",
-		name = name
-	}
+function init_dynamic_train_stop_settings(unit_number, name)
+  --game.players[1].print("init: "..unit_number.." "..name)
+  -- data structure for the mod settings
+  storage.dynamic_train_stop_settings[unit_number] = {
+    use_red = false,
+    use_green = false,
+    red_name = "",
+    green_name = "",
+    name = name
+  }
 end
 
-script.on_event(defines.events.on_gui_checked_state_changed, 
+-- checkbox clicked events
+script.on_event(defines.events.on_gui_checked_state_changed,
   function(event)
-	local player = game.players[event.player_index]
-	local opened = player.opened
-	local checkbox = event.element
-    if checkbox.name == "dynamicTrainStopRed" then 
-	  if not storage.dynamicTrainStopSettings[player.opened.unit_number] then
-		initDynamicTrainStopSettings(player.opened.unit_number, "")
-	  end
-	  storage.dynamicTrainStopSettings[player.opened.unit_number].useRed = checkbox.state
-	  if not checkbox.state then
-		storage.dynamicTrainStopSettings[player.opened.unit_number].redName = ""
-	  end
+    local player = game.players[event.player_index]
+    local train_stop = player.opened
+    local checkbox = event.element
+    if checkbox.name == "dynamic_train_stop_red" then
+      -- update mod settings for this train stop
+      storage.dynamic_train_stop_settings[train_stop.unit_number].use_red = checkbox.state
+      if not checkbox.state then
+        storage.dynamic_train_stop_settings[train_stop.unit_number].red_name = ""
+      end
     end
-	if checkbox.name == "dynamicTrainStopGreen" then 
-	  if not storage.dynamicTrainStopSettings[player.opened.unit_number] then
-		initDynamicTrainStopSettings(player.opened.unit_number, "")
-	  end
-	  storage.dynamicTrainStopSettings[player.opened.unit_number].useGreen = checkbox.state
-	  if not checkbox.state then
-		storage.dynamicTrainStopSettings[player.opened.unit_number].greenName = ""
-	  end
+    if checkbox.name == "dynamic_train_stop_green" then
+      -- update mod settings for this train stop
+      storage.dynamic_train_stop_settings[train_stop.unit_number].use_green = checkbox.state
+      if not checkbox.state then
+        storage.dynamic_train_stop_settings[train_stop.unit_number].green_name = ""
+      end
     end
   end
 )
@@ -198,82 +195,132 @@ script.on_event(
     if event.entity == nil then
       return
     end
-	
+
+    -- train stop opened
     if event.entity.type == 'train-stop' then
-	  local player = game.players[event.player_index]
-	  if not storage.dynamicTrainStopSettings[player.opened.unit_number] then
-		initDynamicTrainStopSettings(player.opened.unit_number, player.opened.backer_name) 
-	  end
-	  local trainStopSetting = storage.dynamicTrainStopSettings[player.opened.unit_number]
-	  -- DEBUG
-	  --player.print(tostring(trainStopSetting.useRed).." : "
-	  --		..tostring(trainStopSetting.useGreen).."   "
-	  --		..tostring(trainStopSetting.redName).." - "
-	  --		..tostring(trainStopSetting.greenName).." - "
-	  --		..tostring(trainStopSetting.name).." : "
-	  --)
-	  
-	  local anchor = {
-		gui = defines.relative_gui_type.train_stop_gui, 
-		position = defines.relative_gui_position.right
-	  }
+      local player = game.players[event.player_index]
+      -- init/load mod settings for this train stop
+      if not storage.dynamic_train_stop_settings[player.opened.unit_number] then
+        init_dynamic_train_stop_settings(player.opened.unit_number, player.opened.backer_name)
+      end
+      local train_stop_setting = storage.dynamic_train_stop_settings[player.opened.unit_number]
+      -- DEBUG
+      --player.print(tostring(train_stop_setting.use_red).." : "
+      --		..tostring(train_stop_setting.use_green).."   "
+      --		..tostring(train_stop_setting.red_name).." - "
+      --		..tostring(train_stop_setting.green_name).." - "
+      --		..tostring(train_stop_setting.name).." : "
+      --)
+
       local gui = player.gui.relative
-	  
+
+      -- check if the ui was created with an old mod version and destroy it to rebuilt the new one
+      if gui.train_stop and not gui.train_stop.controls_flow_v.controls_flow_red.dynamic_train_stop_red then
+        gui.train_stop.destroy()
+      end
+
       if gui.train_stop then
-		gui.train_stop.controls_flow_v.controls_flow_red.dynamicTrainStopRed.state = trainStopSetting.useRed;
-		gui.train_stop.controls_flow_v.controls_flow_green.dynamicTrainStopGreen.state = trainStopSetting.useGreen;
+        -- if gui was already created, only update button state
+        gui.train_stop.controls_flow_v.controls_flow_red.dynamic_train_stop_red.state = train_stop_setting.use_red;
+        gui.train_stop.controls_flow_v.controls_flow_green.dynamic_train_stop_green.state = train_stop_setting.use_green;
         return
       end
-	 
-      local frame = gui.add({
-        type = "frame",
-        name = "train_stop",
-        direction = "vertical",
-		caption="Dynamic Naming",
-		anchor = anchor
-      })
-	  local controls_flow_v = frame.add {
-		type="flow", 
-		name="controls_flow_v", 
-		direction="vertical"
-	  }
-	  
-	  local controls_flow_red = controls_flow_v.add {
-		type="flow", 
-		name="controls_flow_red", 
-		direction="horizontal"	  
-	  }
-	  controls_flow_red.add({
-        type = "checkbox",
-		name = "dynamicTrainStopRed",
-        state = trainStopSetting.useRed
-      })
-      controls_flow_red.add({
-        type = "label",
-        name = "redLabel",
-		caption = "Use Red Circuit",
-        tooltip = "Puts all signals from the red circuit into at the beginning of the name of the train stop."
-      })
 
-	  local controls_flow_green = controls_flow_v.add {
-		type="flow", 
-		name="controls_flow_green", 
-		direction="horizontal"	  
-	  }
-	  controls_flow_green.add({
-        type = "checkbox",
-		name = "dynamicTrainStopGreen",
-        state = trainStopSetting.useGreen
-      })
-      controls_flow_green.add({
-        type = "label",
-		name = "greenLabel",
-        caption = "Use Green Circuit",
-        tooltip = "Puts all signals from the green circuit into at the beginning of the name of the train stop."
-      })
+      -- create gui
+      local anchor = {
+        gui = defines.relative_gui_type.train_stop_gui,
+        position = defines.relative_gui_position.right
+      }
+
+      local frame = add_or_load_ui_element(
+        {
+          type = "frame",
+          name = "train_stop",
+          direction = "vertical",
+          caption = "Dynamic Naming",
+          anchor = anchor
+        },
+        "train_stop",
+        gui
+      )
+      local controls_flow_v = add_or_load_ui_element(
+        {
+          type = "flow",
+          name = "controls_flow_v",
+          direction = "vertical"
+        },
+        "controls_flow_v",
+        frame
+      )
+      local controls_flow_red = add_or_load_ui_element(
+        {
+          type = "flow",
+          name = "controls_flow_red",
+          direction = "horizontal"
+        },
+        "controls_flow_red",
+        controls_flow_v
+      )
+      add_or_load_ui_element(
+        {
+          type = "checkbox",
+          name = "dynamic_train_stop_red",
+          state = train_stop_setting.use_red
+        },
+        "dynamic_train_stop_red",
+        controls_flow_red
+      )
+      add_or_load_ui_element(
+        {
+          type = "label",
+          name = "red_label",
+          caption = "Use Red Circuit",
+          tooltip = "Puts all signals from the red circuit into at the beginning of the name of the train stop."
+        },
+        "red_label",
+        controls_flow_red
+      )
+      local controls_flow_green = add_or_load_ui_element(
+        {
+          type = "flow",
+          name = "controls_flow_green",
+          direction = "horizontal"
+        },
+        "controls_flow_green",
+        controls_flow_v
+      )
+      add_or_load_ui_element(
+        {
+          type = "checkbox",
+          name = "dynamic_train_stop_green",
+          state = train_stop_setting.use_green
+        },
+        "dynamic_train_stop_green",
+        controls_flow_green
+      )
+      add_or_load_ui_element(
+        {
+          type = "label",
+          name = "green_label",
+          caption = "Use Green Circuit",
+          tooltip = "Puts all signals from the green circuit into at the beginning of the name of the train stop."
+        },
+        "green_label",
+        controls_flow_green
+      )
     end
   end
 )
+
+function add_or_load_ui_element(new_element, new_element_name, parent)
+  local result
+  if parent[new_element_name] then
+    result = parent[new_element_name]
+  else
+    result = parent.add(new_element)
+  end
+  return result
+end
 
 script.on_event(
   defines.events.on_gui_closed,
@@ -286,11 +333,11 @@ script.on_event(
       if player == nil then
         return
       end
-	  local gui = player.gui.center
-	  if not gui.train_stop then
-        return  
-	  end
-	  gui.train_stop.destroy()
+      local gui = player.gui.center
+      if not gui.train_stop then
+        return
+      end
+      gui.train_stop.destroy()
     end
   end
 )
