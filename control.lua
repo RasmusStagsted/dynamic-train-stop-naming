@@ -31,12 +31,30 @@ script.on_event(defines.events.on_robot_mined_entity,
   { { filter = "name", name = "train-stop" } }
 )
 
+-- copy settings when cloning train stop (shift click)
+script.on_event(defines.events.on_entity_settings_pasted ,
+  function(event)
+    if event.source.type ~= 'train-stop' or event.destination.type ~= 'train-stop' then
+      return
+    end
+    --game.players[1].print("on_entity_settings_pasted: "..event.source.unit_number)
+    local source_settings = storage.dynamic_train_stop_settings[event.source.unit_number]
+    local destination_settings = init_dynamic_train_stop_settings(event.destination.unit_number, source_settings.name)
+    destination_settings.use_red = source_settings.use_red
+    destination_settings.use_green = source_settings.use_green
+  end
+)
+
+-- update the postfix name on manual name edit
 script.on_event(defines.events.on_entity_renamed,
   function(event)
+    --game.players[1].print("on_entity_renamed: "..tostring(event.by_script))
     if event.by_script or event.entity.type ~= 'train-stop' then
       return
     end
-    storage.dynamic_train_stop_settings[event.entity.unit_number].name = event.entity.backer_name
+    if storage.dynamic_train_stop_settings[event.entity.unit_number] then
+      storage.dynamic_train_stop_settings[event.entity.unit_number].name = event.entity.backer_name
+    end
   end
 )
 
@@ -155,7 +173,6 @@ function remove_expected_control_signals(train_stop, signals)
 end
 
 function init_dynamic_train_stop_settings(unit_number, name)
-  --game.players[1].print("init: "..unit_number.." "..name)
   -- data structure for the mod settings
   storage.dynamic_train_stop_settings[unit_number] = {
     use_red = false,
@@ -164,6 +181,7 @@ function init_dynamic_train_stop_settings(unit_number, name)
     green_name = "",
     name = name
   }
+  return storage.dynamic_train_stop_settings[unit_number]
 end
 
 -- checkbox clicked events
@@ -214,7 +232,7 @@ script.on_event(
 
       local gui = player.gui.relative
 
-      -- check if the ui was created with an old mod version and destroy it to rebuilt the new one
+      -- check if the ui was created with an old mod version and destroy it to rebuild the new one
       if gui.train_stop and not gui.train_stop.controls_flow_v.controls_flow_red.dynamic_train_stop_red then
         gui.train_stop.destroy()
       end
