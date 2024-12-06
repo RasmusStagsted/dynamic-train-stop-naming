@@ -2,6 +2,7 @@
 script.on_init(
   function()
     storage.dynamic_train_stop_settings = {}
+    storage.blueprint_mappings = {}
   end
 )
 
@@ -11,6 +12,9 @@ script.on_configuration_changed(
     -- create the storage variable for save games with old versions of this mod
     if not storage.dynamic_train_stop_settings then
       storage.dynamic_train_stop_settings = {}
+    end
+    if not storage.blueprint_mappings then
+      storage.blueprint_mappings = {}
     end
   end
 )
@@ -32,7 +36,7 @@ script.on_event(defines.events.on_robot_mined_entity,
 )
 
 -- copy settings when cloning train stop (shift click)
-script.on_event(defines.events.on_entity_settings_pasted ,
+script.on_event(defines.events.on_entity_settings_pasted,
   function(event)
     if event.source.type ~= 'train-stop' or event.destination.type ~= 'train-stop' then
       return
@@ -44,6 +48,69 @@ script.on_event(defines.events.on_entity_settings_pasted ,
     destination_settings.use_green = source_settings.use_green
   end
 )
+
+-- saving to copy-paste tool & cut-paste tool
+script.on_event(defines.events.on_player_setup_blueprint,
+  function(event)
+    local player = game.players[event.player_index]
+
+    local cursor = player.cursor_stack
+    if cursor and cursor.valid_for_read and cursor.type == 'blueprint' then
+      save_blueprint_data(cursor, event.mapping.get())
+    else
+      storage.blueprint_mappings[player.index] = event.mapping.get()
+    end
+  end
+)
+
+-- saving to regular blueprint
+script.on_event(defines.events.on_player_configured_blueprint,
+  function(event)
+    local player = game.players[event.player_index]
+    local mapping = storage.blueprint_mappings[player.index]
+    local cursor = player.cursor_stack
+
+    if cursor and cursor.valid_for_read and cursor.type == 'blueprint' and mapping and #mapping == cursor.get_blueprint_entity_count() then
+      save_blueprint_data(cursor, mapping)
+    end
+    storage.blueprint_mappings[player.index] = nil
+  end
+)
+
+-- called when player builds something.
+script.on_event(defines.events.on_built_entity,
+  function(event)
+    on_train_stop_built(event.entity, event.tags)
+  end,
+  { { filter = "name", name = "train-stop" } }
+)
+
+-- called when a construction robot builds an entity.
+script.on_event(defines.events.on_robot_built_entity,
+  function(event)
+    on_train_stop_built(event.entity, event.tags)
+  end,
+  { { filter = "name", name = "train-stop" } }
+)
+
+function save_blueprint_data(blueprint, mapping)
+  for i, entity in pairs(mapping) do
+    if entity.valid and entity.type == 'train-stop' then
+      if storage.dynamic_train_stop_settings[entity.unit_number] then
+        local train_stop_setting = storage.dynamic_train_stop_settings[entity.unit_number]
+        blueprint.set_blueprint_entity_tag(i, 'train_stop_setting', train_stop_setting)
+      end
+    end
+  end
+end
+
+function on_train_stop_built(entity, tags)
+  if tags and tags.train_stop_setting then
+    local train_stop_setting = init_dynamic_train_stop_settings(entity.unit_number, tags.train_stop_setting.name)
+    train_stop_setting.use_red = tags.train_stop_setting.use_red
+    train_stop_setting.use_green = tags.train_stop_setting.use_green
+  end
+end
 
 -- update the postfix name on manual name edit
 script.on_event(defines.events.on_entity_renamed,
@@ -359,4 +426,3 @@ script.on_event(
     end
   end
 )
-
