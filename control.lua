@@ -6,6 +6,15 @@ script.on_init(
   end
 )
 
+script.on_configuration_changed(
+  function()
+    -- Initialize the train stop table if not initialized when mod version is changed
+    if not storage.train_stop_list then
+      storage.train_stop_list = {}
+    end
+  end
+)
+
 script.on_event(defines.events.on_tick,
   function(event)
     if not storage.train_stop_list then
