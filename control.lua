@@ -1,11 +1,8 @@
 script.on_init(
   function()
-    log("On init")
     if not storage.train_stop_list then
-      log("Initializing train_stop_list")
       storage.train_stop_list = {}
     end
-    log("Train stop count: " .. #storage.train_stop_list)
   end
 )
 
@@ -14,14 +11,10 @@ script.on_event(defines.events.on_tick,
     if not storage.train_stop_list then
       storage.train_stop_list = {}
     end
-    if event.tick % 60 == 0 then
-        log("Persisted train stop count: " .. #storage.train_stop_list)
-    end
 end)
 
 script.on_event(defines.events.on_built_entity,
   function(event)
-    log("Train stop added.")
     table.insert(storage.train_stop_list, event.entity)
   end,
   {{filter = "name", name = "train-stop"}}
@@ -29,7 +22,6 @@ script.on_event(defines.events.on_built_entity,
 
 script.on_event(defines.events.on_robot_built_entity,
   function(event)
-    log("Train stop added.")
     table.insert(storage.train_stop_list, event.entity)
   end,
   {{filter = "name", name = "train-stop"}}
@@ -37,7 +29,6 @@ script.on_event(defines.events.on_robot_built_entity,
 
 script.on_event(defines.events.on_player_mined_entity,
   function(event)
-    log("Train stop removed.")
     remove_entity_from_list(event.entity, storage.train_stop_list)
   end,
   {{filter = "name", name = "train-stop"}}
@@ -45,7 +36,6 @@ script.on_event(defines.events.on_player_mined_entity,
 
 script.on_event(defines.events.on_robot_mined_entity,
   function(event)
-    log("Train stop removed.")
     remove_entity_from_list(event.entity, storage.train_stop_list)
   end,
   {{filter = "name", name = "train-stop"}}
@@ -158,90 +148,3 @@ function remove_entity_from_list(entity, list)
     end
   end
 end
-
-
---[[
-script.on_load(
-  function()
-    generate_train_stop_list()
-  end
-)
-
-script.on_init(
-  function()
-    generate_train_stop_list()
-  end
-)
-]]--
-
-
---[[
-script.on_event(
-  defines.events.on_gui_opened,
-  function(event)
-    if event.entity == nil then
-      return
-    end
-    if event.entity.type == 'train-stop' then
-      local player = game.players[event.player_index]
-      gui = player.gui.children.center
-      if gui.turret_wrap then
-        return
-      end
-      gui.add({
-        type = "frame",
-        name = "turret_wrap",
-        direction = "horizontal",
-        style = "trainstopgui"
-      })
-
-      gui.turret_wrap.add({
-        type = "frame",
-        name = "button_f",
-        direction = "vertical"
-      })
-		  
-      gui.turret_wrap.add({
-        type = "flow",
-        name = "textFlow",
-        direction = "vertical",
-        style = "textlabel_flow"
-      })
-
-      gui.turret_wrap.button_f.add({
-        type = "radiobutton",
-        state = true
-      })
-
-      gui.turret_wrap.textFlow.add({
-        type = "label",
-        name = "test",
-        caption = "test2"
-      })
-
-      --gui.add(type = "radiobutton", name = "enable-dynamic-name-control", caption = "Enable dynamic name control", state = true)
-    end
-  end
-)
-
-script.on_event(
-  defines.events.on_gui_closed,
-  function(event)
-    if event.entity == nil then
-      return
-    end
-    if event.entity.type == 'train-stop' then
-      local player = game.players[event.player_index]
-      if player == nil then
-        return
-      end
-		  local gui = player.gui.center
-		  if not gui.turret_wrap then
-        return  
-		  end
-		
-		  gui.turret_wrap.destroy()
-    end
-  end
-)
-]]--
