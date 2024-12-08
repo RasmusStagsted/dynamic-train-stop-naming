@@ -17,6 +17,17 @@ script.on_configuration_changed(
   end
 )
 
+-- copy settings when cloning train stop (shift click)
+script.on_event(defines.events.on_entity_settings_pasted,
+  function(event)
+    if event.source.type == 'train-stop' and event.destination.type == 'train-stop' then
+      local source = storage.train_stop_table[event.source.unit_number].settings
+      local dest = storage.train_stop_table[event.destination.unit_number].settings
+      dest.name_post_fix = source.name_post_fix
+    end
+  end
+)
+
 script.on_event(defines.events.on_tick,
   function(event)
     if not storage.train_stop_table then
@@ -26,7 +37,7 @@ end)
 
 script.on_event(defines.events.on_built_entity,
   function(event)
-    entity_id = event.entity.unit_number
+    local entity_id = event.entity.unit_number
     storage.train_stop_table[entity_id] = {entity = event.entity, settings = {name_post_fix = ""}}
   end,
   {{filter = "name", name = "train-stop"}}
@@ -34,7 +45,7 @@ script.on_event(defines.events.on_built_entity,
 
 script.on_event(defines.events.on_robot_built_entity,
   function(event)
-    entity_id = event.entity.unit_number
+    local entity_id = event.entity.unit_number
     storage.train_stop_table[entity_id] = {entity = event.entity, settings = {name_post_fix = ""}}
   end,
   {{filter = "name", name = "train-stop"}}
@@ -42,7 +53,7 @@ script.on_event(defines.events.on_robot_built_entity,
 
 script.on_event(defines.events.on_player_mined_entity,
   function(event)
-    entity_id = event.entity.unit_number
+    local entity_id = event.entity.unit_number
     if storage.train_stop_table[entity_id] then
       storage.train_stop_table[entity_id] = nil
     end
@@ -52,7 +63,7 @@ script.on_event(defines.events.on_player_mined_entity,
 
 script.on_event(defines.events.on_robot_mined_entity,
   function(event)
-    entity_id = event.entity.unit_number
+    local entity_id = event.entity.unit_number
     if storage.train_stop_table[entity_id] then
       storage.train_stop_table[entity_id] = nil
     end
@@ -93,7 +104,7 @@ function generate_train_stop_table()
   for _, surface in pairs(game.surfaces) do
     local train_stops = surface.find_entities_filtered({type = "train-stop"})
     for _, train_stop in pairs(train_stops) do
-      entity_id = train_stop.unit_number
+      local entity_id = train_stop.unit_number
       storage.train_stop_table[entity_id] = {entity = train_stop, settings = {name_post_fix = ""}}
     end
   end
