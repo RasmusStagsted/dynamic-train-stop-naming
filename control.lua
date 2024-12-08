@@ -27,7 +27,7 @@ end)
 script.on_event(defines.events.on_built_entity,
   function(event)
     entity_id = event.entity.unit_number
-    storage.train_stop_table[entity_id] = event.entity
+    storage.train_stop_table[entity_id] = {entity = event.entity, settings = {name_post_fix = ""}}
   end,
   {{filter = "name", name = "train-stop"}}
 )
@@ -35,7 +35,7 @@ script.on_event(defines.events.on_built_entity,
 script.on_event(defines.events.on_robot_built_entity,
   function(event)
     entity_id = event.entity.unit_number
-    storage.train_stop_table[entity_id] = event.entity
+    storage.train_stop_table[entity_id] = {entity = event.entity, settings = {name_post_fix = ""}}
   end,
   {{filter = "name", name = "train-stop"}}
 )
@@ -60,16 +60,29 @@ script.on_event(defines.events.on_robot_mined_entity,
   {{filter = "name", name = "train-stop"}}
 )
 
+script.on_event(defines.events.on_entity_renamed,
+  function(event)
+	  if event.entity.type == 'train-stop' and not event.by_script then
+      local entity_id = event.entity.unit_number
+    	if storage.train_stop_table[entity_id] then
+		    storage.train_stop_table[entity_id].settings.name_post_fix = event.entity.backer_name
+      else
+        log("Unrecognized train stop: (id: " .. entity_id .. ")")
+      end
+    end
+  end
+)
+
 script.on_event(defines.events.on_tick,
   function(event)
+    
     storage.train_stop_table = storage.train_stop_table or {}
     for i, train_stop in pairs(storage.train_stop_table) do
-      local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_red)
+      local network = train_stop.entity.get_circuit_network(defines.wire_connector_id.circuit_red)
       if network then
-        local signals = network.signals
+        local signals = network.signals or {}
         signals = remove_expected_control_signals(train_stop, signals)
-        set_train_stop_name(train_stop, signals)
-
+        set_train_stop_name(train_stop, signals, storage.train_stop_table)
       end
     end
   end
@@ -79,17 +92,24 @@ function generate_train_stop_table()
   storage.train_stop_table = storage.train_stop_table or {}
   for _, surface in pairs(game.surfaces) do
     local train_stops = surface.find_entities_filtered({type = "train-stop"})
-    for _, stop in pairs(train_stops) do
-      entity_id = stop.unit_number
-      storage.train_stop_table[entity_id] = stop
+    for _, train_stop in pairs(train_stops) do
+      entity_id = train_stop.unit_number
+      storage.train_stop_table[entity_id] = {entity = train_stop, settings = {name_post_fix = ""}}
     end
   end
 end
 
-function set_train_stop_name(train_stop, signals)
+function set_train_stop_name(train_stop, signals, all_stops)
+  local new_name = get_text_string_from_signal(signals) .. train_stop.settings.name_post_fix
+  if not (new_name == train_stop.entity.backer_name) then
+    train_stop.entity.backer_name = new_name
+  end
+end
+
+function get_text_string_from_signal(signals)
+  local text_string = ""
   if signals then
-    local new_name = ""
-    for index, signal in ipairs(signals) do
+    for index, signal in pairs(signals) do
       signal = signal.signal
       local pre_fix = nil
       if signal.name == "solar-system-edge" then
@@ -104,19 +124,17 @@ function set_train_stop_name(train_stop, signals)
           pre_fix = signal.type
       end
       if not pre_fix then
-          new_name = new_name .. signal.name
+        text_string = text_string .. signal.name
       else
-        new_name = new_name .. "[" .. pre_fix .. "=" .. signal.name .. "]"
+        text_string = text_string .. "[" .. pre_fix .. "=" .. signal.name .. "]"
       end
     end
-    if not (train_stop.backer_name == new_name) then
-      train_stop.backer_name = new_name
-    end
   end
+  return text_string
 end
 
 function remove_signal(signals, signal)
-  for i, v in ipairs(signals) do
+  for i, v in pairs(signals) do
     if v.signal.name == signal.name then
       table.remove(signals, i)
       break
@@ -127,9 +145,9 @@ end
 function remove_expected_control_signals(train_stop, signals)
 
   -- Remove signal from list, used for train stop enable/disable
-  local control_behavior = train_stop.get_control_behavior()
+  local control_behavior = train_stop.entity.get_control_behavior()
   if (control_behavior.circuit_enable_disable) then
-    local condition = control_behavior.circuit_condition.condition
+    local condition = control_behavior.circuit_condition
     if (condition.first_signal) then
       remove_signal(signals, condition.first_signal)
       if (condition.second_signal) then
