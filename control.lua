@@ -100,7 +100,7 @@ script.on_event(defines.events.on_tick,
       local new_name = ""
       if train_stop.settings.network_order == "none" then
         local signals = {table.unpack(red_signals), table.unpack(green_signals)}
-        new_name = get_text_string_from_signal(signals)
+        new_name = get_text_string_from_signal(signals) .. train_stop.settings.name_post_fix
       else
         local red_name = get_text_string_from_signal(red_signals)
         local green_name = get_text_string_from_signal(green_signals)
