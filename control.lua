@@ -3,6 +3,7 @@ script.on_init(
     if not storage.train_stop_table then
       storage.train_stop_table = {}
     end
+    generate_train_stop_table()
   end
 )
 
@@ -12,6 +13,7 @@ script.on_configuration_changed(
     if not storage.train_stop_table then
       storage.train_stop_table = {}
     end
+    generate_train_stop_table()
   end
 )
 
@@ -78,8 +80,8 @@ function generate_train_stop_table()
   for _, surface in pairs(game.surfaces) do
     local train_stops = surface.find_entities_filtered({type = "train-stop"})
     for _, stop in pairs(train_stops) do
-      entity_id = event.entity.unit_number
-      storage.train_stop_table[entity_id] = event.entity
+      entity_id = stop.unit_number
+      storage.train_stop_table[entity_id] = stop
     end
   end
 end
@@ -127,7 +129,8 @@ function remove_expected_control_signals(train_stop, signals)
   -- Remove signal from list, used for train stop enable/disable
   local control_behavior = train_stop.get_control_behavior()
   if (control_behavior.circuit_enable_disable) then
-    if (control_behavior.circuit_condition.condition) then -- This will never become true! Why?
+    local condition = control_behavior.circuit_condition.condition
+    if (condition.first_signal) then
       remove_signal(signals, condition.first_signal)
       if (condition.second_signal) then
         remove_signal(signals, condition.second_signal)
