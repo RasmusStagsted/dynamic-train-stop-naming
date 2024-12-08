@@ -1,7 +1,7 @@
 script.on_init(
   function()
-    if not storage.train_stop_list then
-      storage.train_stop_list = {}
+    if not storage.train_stop_table then
+      storage.train_stop_table = {}
     end
   end
 )
@@ -9,51 +9,59 @@ script.on_init(
 script.on_configuration_changed(
   function()
     -- Initialize the train stop table if not initialized when mod version is changed
-    if not storage.train_stop_list then
-      storage.train_stop_list = {}
+    if not storage.train_stop_table then
+      storage.train_stop_table = {}
     end
   end
 )
 
 script.on_event(defines.events.on_tick,
   function(event)
-    if not storage.train_stop_list then
-      storage.train_stop_list = {}
+    if not storage.train_stop_table then
+      storage.train_stop_table = {}
     end
 end)
 
 script.on_event(defines.events.on_built_entity,
   function(event)
-    table.insert(storage.train_stop_list, event.entity)
+    entity_id = event.entity.unit_number
+    storage.train_stop_table[entity_id] = event.entity
   end,
   {{filter = "name", name = "train-stop"}}
 )
 
 script.on_event(defines.events.on_robot_built_entity,
   function(event)
-    table.insert(storage.train_stop_list, event.entity)
+    entity_id = event.entity.unit_number
+    storage.train_stop_table[entity_id] = event.entity
   end,
   {{filter = "name", name = "train-stop"}}
 )
 
 script.on_event(defines.events.on_player_mined_entity,
   function(event)
-    remove_entity_from_list(event.entity, storage.train_stop_list)
+    entity_id = event.entity.unit_number
+    if storage.train_stop_table[entity_id] then
+      storage.train_stop_table[entity_id] = nil
+    end
   end,
   {{filter = "name", name = "train-stop"}}
 )
 
 script.on_event(defines.events.on_robot_mined_entity,
   function(event)
-    remove_entity_from_list(event.entity, storage.train_stop_list)
+    entity_id = event.entity.unit_number
+    if storage.train_stop_table[entity_id] then
+      storage.train_stop_table[entity_id] = nil
+    end
   end,
   {{filter = "name", name = "train-stop"}}
 )
 
 script.on_event(defines.events.on_tick,
   function(event)
-    storage.train_stop_list = storage.train_stop_list or {}
-    for i, train_stop in ipairs(storage.train_stop_list) do
+    storage.train_stop_table = storage.train_stop_table or {}
+    for i, train_stop in pairs(storage.train_stop_table) do
       local network = train_stop.get_circuit_network(defines.wire_connector_id.circuit_red)
       if network then
         local signals = network.signals
@@ -65,12 +73,13 @@ script.on_event(defines.events.on_tick,
   end
 )
 
-function generate_train_stop_list()
-  storage.train_stop_list = storage.train_stop_list or {}
+function generate_train_stop_table()
+  storage.train_stop_table = storage.train_stop_table or {}
   for _, surface in pairs(game.surfaces) do
     local train_stops = surface.find_entities_filtered({type = "train-stop"})
     for _, stop in pairs(train_stops) do
-      table.insert(storage.train_stop_list, stop)
+      entity_id = event.entity.unit_number
+      storage.train_stop_table[entity_id] = event.entity
     end
   end
 end
@@ -147,13 +156,4 @@ function remove_expected_control_signals(train_stop, signals)
   end
 
   return signals
-end
-
-function remove_entity_from_list(entity, list)
-  for i, val in ipairs(list) do
-    if val == entity then
-      table.remove(list, i)
-      break
-    end
-  end
 end
