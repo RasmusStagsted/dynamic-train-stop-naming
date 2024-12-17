@@ -15,6 +15,11 @@ script.on_event(defines.events.on_entity_settings_pasted,
     if event.source.type == 'train-stop' and event.destination.type == 'train-stop' then
       local source = storage.train_stop_table[event.source.unit_number].settings
       local dest = storage.train_stop_table[event.destination.unit_number].settings
+      dest.enable_red_network = source.enable_red_network
+      dest.enable_green_network = source.enable_green_network
+      dest.red_name = source.red_name
+      dest.green_name = source.green_name
+      dest.network_order = source.network_order
       dest.name_post_fix = source.name_post_fix
     end
   end
