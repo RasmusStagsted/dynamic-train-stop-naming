@@ -66,6 +66,7 @@ function gui.on_gui_closed(event)
 end
 
 function gui.on_gui_opened(event)
+
   if event.entity and event.entity.type == 'train-stop' then
     local player = game.players[event.player_index]
     local train_stop = storage.train_stop_table[player.opened.unit_number]

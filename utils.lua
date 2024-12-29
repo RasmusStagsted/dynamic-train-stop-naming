@@ -86,4 +86,18 @@ function utils.create_train_stop_object(entity)
   }
 end
 
+function utils.generate_train_stop_table()
+  storage.train_stop_table = storage.train_stop_table or {}
+  if not storage.blueprint_mapping then
+    storage.blueprint_mapping = {}
+  end
+  for _, surface in pairs(game.surfaces) do
+    local train_stops = surface.find_entities_filtered({type = "train-stop"})
+    for _, train_stop in pairs(train_stops) do
+      local entity_id = train_stop.unit_number
+      storage.train_stop_table[entity_id] = utils.create_train_stop_object(train_stop)
+    end
+  end
+end
+
 return utils

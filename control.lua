@@ -1,14 +1,6 @@
 gui = require("gui")
 utils = require("utils")
 
-script.on_event(defines.events.on_gui_opened, gui.on_gui_opened)
-script.on_event(defines.events.on_gui_closed, gui.on_gui_closed)
-script.on_event(defines.events.on_gui_checked_state_changed, gui.on_gui_checked_state_changed)
-script.on_event(defines.events.on_gui_switch_state_changed, gui.on_gui_switch_state_changed)
-
-script.on_init(generate_train_stop_table)
-script.on_configuration_changed(generate_train_stop_table)
-
 script.on_event(defines.events.on_entity_settings_pasted,
   function(event)
     if event.source.type == 'train-stop' and event.destination.type == 'train-stop' then
@@ -24,47 +16,56 @@ script.on_event(defines.events.on_entity_settings_pasted,
   end
 )
 
-script.on_event(defines.events.on_tick,
+script.on_event(defines.events.on_player_setup_blueprint,
   function(event)
-    if not storage.train_stop_table then
-      storage.train_stop_table = {}
+    local player = game.players[event.player_index]
+    local blueprint = player.cursor_stack
+    local blueprint_mapping = event.mapping.get()
+    if (
+      blueprint and
+      blueprint.type == 'blueprint' and
+      blueprint.valid_for_read
+    ) then
+      for i, entity in pairs(blueprint_mapping) do
+        if (
+          entity.valid and entity.type == 'train-stop' and
+          storage.train_stop_table[entity.unit_number]
+        ) then
+          local settings = storage.train_stop_table[entity.unit_number].settings
+          log(settings.enable_red_network)
+          blueprint.set_blueprint_entity_tag(i, 'train_stop_settings', settings)
+        end
+      end
+    else
+      storage.blueprint_mapping[player.index] = blueprint_mapping
     end
-end)
-
-script.on_event(defines.events.on_built_entity,
-  function(event)
-    local entity_id = event.entity.unit_number
-    storage.train_stop_table[entity_id] = utils.create_train_stop_object(event.entity)
-  end,
-  {{filter = "name", name = "train-stop"}}
+  end
 )
 
-script.on_event(defines.events.on_robot_built_entity,
+script.on_event(defines.events.on_player_configured_blueprint,
   function(event)
-    local entity_id = event.entity.unit_number
-    storage.train_stop_table[entity_id] = utils.create_train_stop_object(event.entity)
-  end,
-  {{filter = "name", name = "train-stop"}}
-)
+    local player_index = event.player_index
+    local blueprint_mapping = storage.blueprint_mappings[player_index]
+    local blueprint = player.cursor_stack
 
-script.on_event(defines.events.on_player_mined_entity,
-  function(event)
-    local entity_id = event.entity.unit_number
-    if storage.train_stop_table[entity_id] then
-      storage.train_stop_table[entity_id] = nil
-    end
-  end,
-  {{filter = "name", name = "train-stop"}}
-)
+    log(blueprint == nil)
+    log(blueprint.type)
+    log(blueprint.valid_for_read)
+    log(blueprint_mapping)
+    log(blueprint.get_blueprint_entity_count())
+    log(#blueprint_mapping)
 
-script.on_event(defines.events.on_robot_mined_entity,
-  function(event)
-    local entity_id = event.entity.unit_number
-    if storage.train_stop_table[entity_id] then
-      storage.train_stop_table[entity_id] = nil
+    if (
+      blueprint and
+      blueprint.type == 'blueprint' and
+      blueprint.valid_for_read and
+      blueprint_mapping and
+      #blueprint_mapping == blueprint.get_blueprint_entity_count()
+    ) then
+      save_blueprint_data(blueprint, blueprint_mapping)
     end
-  end,
-  {{filter = "name", name = "train-stop"}}
+    storage.blueprint_mappings[player_index] = nil
+  end
 )
 
 script.on_event(defines.events.on_entity_renamed,
@@ -82,8 +83,10 @@ script.on_event(defines.events.on_entity_renamed,
 
 script.on_event(defines.events.on_tick,
   function(event)
-    storage.train_stop_table = storage.train_stop_table or {}
-    for i, train_stop in pairs(storage.train_stop_table) do
+    if not storage.train_stop_table then
+      storage.train_stop_table = {}
+    end
+    for entity_id, train_stop in pairs(storage.train_stop_table) do
       local red_signals = {}
       local green_signals = {}
       if train_stop.settings.enable_red_network then
@@ -116,20 +119,49 @@ script.on_event(defines.events.on_tick,
           new_name = green_name .. red_name .. train_stop.settings.name_post_fix
         end
       end
-      if not (new_name == train_stop.entity.backer_name) then
+      if train_stop.entity.valid and not (new_name == train_stop.entity.backer_name) then
         train_stop.entity.backer_name = new_name
       end
     end
   end
 )
 
-function generate_train_stop_table()
-  storage.train_stop_table = storage.train_stop_table or {}
-  for _, surface in pairs(game.surfaces) do
-    local train_stops = surface.find_entities_filtered({type = "train-stop"})
-    for _, train_stop in pairs(train_stops) do
-      local entity_id = train_stop.unit_number
-      storage.train_stop_table[entity_id] = utils.create_train_stop_object(train_stop)
+function on_entity_build(event)
+  local entity_id = event.entity.unit_number
+  local train_stop = utils.create_train_stop_object(event.entity)
+  local tags = event.tags
+  storage.train_stop_table[entity_id] = train_stop
+  if tags and tags.train_stop_settings then
+    local setting = train_stop.settings
+    setting.use_red = tags.train_stop_settings.use_red
+    setting.use_green = tags.train_stop_settings.use_green
+    for key, value in pairs(tags.train_stop_settings) do
+      setting[key] = value
     end
   end
 end
+
+function on_entity_mined(event)
+  local entity_id = event.entity.unit_number
+  if storage.train_stop_table[entity_id] then
+    storage.train_stop_table[entity_id] = nil
+  end
+end
+
+train_stop_filter = {{filter = "name", name = "train-stop"}}
+
+-- Initialization callbacks
+script.on_init(utils.generate_train_stop_table)
+script.on_configuration_changed(utils.generate_train_stop_table)
+
+-- GUI callbacks
+script.on_event(defines.events.on_gui_opened, gui.on_gui_opened)
+script.on_event(defines.events.on_gui_closed, gui.on_gui_closed)
+script.on_event(defines.events.on_gui_checked_state_changed, gui.on_gui_checked_state_changed)
+script.on_event(defines.events.on_gui_switch_state_changed, gui.on_gui_switch_state_changed)
+
+-- entity built/removed callbacks
+script.on_event(defines.events.on_built_entity, on_entity_build, train_stop_filter)
+script.on_event(defines.events.on_robot_built_entity, on_entity_build, train_stop_filter)
+script.on_event(defines.events.on_player_mined_entity, on_entity_removed, train_stop_filter)
+script.on_event(defines.events.on_robot_mined_entity, on_entity_removed, train_stop_filter)
