@@ -2,7 +2,7 @@ local gui = {}
 
 function gui.on_gui_switch_state_changed(event)
   local entity = game.players[event.player_index].opened
-  if entity.type == "train-stop" then
+  if entity and entity.type == "train-stop" then
     local switch = event.element
     local train_stop = storage.train_stop_table[entity.unit_number]
     train_stop.settings.network_order = switch.switch_state
@@ -11,7 +11,7 @@ end
 
 function gui.on_gui_checked_state_changed(event)
   local entity = game.players[event.player_index].opened
-  if entity.type == "train-stop" then
+  if entity and entity.type == "train-stop" then
     local checkbox = event.element
     local train_stop = storage.train_stop_table[entity.unit_number]
     if checkbox.name == "dtsn_red_network" then

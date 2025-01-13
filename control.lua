@@ -22,6 +22,7 @@ script.on_event(defines.events.on_player_setup_blueprint,
     local blueprint = player.cursor_stack
     local blueprint_mapping = event.mapping.get()
     if (
+      blueprint ~= nil and
       blueprint and
       blueprint.type == 'blueprint' and
       blueprint.valid_for_read
@@ -47,13 +48,6 @@ script.on_event(defines.events.on_player_configured_blueprint,
     local player_index = event.player_index
     local blueprint_mapping = storage.blueprint_mappings[player_index]
     local blueprint = player.cursor_stack
-
-    log(blueprint == nil)
-    log(blueprint.type)
-    log(blueprint.valid_for_read)
-    log(blueprint_mapping)
-    log(blueprint.get_blueprint_entity_count())
-    log(#blueprint_mapping)
 
     if (
       blueprint and
