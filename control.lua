@@ -24,8 +24,8 @@ script.on_event(defines.events.on_player_setup_blueprint,
     if (
       blueprint ~= nil and
       blueprint and
-      blueprint.type == 'blueprint' and
-      blueprint.valid_for_read
+      blueprint.valid_for_read and
+      blueprint.type == 'blueprint'
     ) then
       for i, entity in pairs(blueprint_mapping) do
         if (
@@ -51,8 +51,8 @@ script.on_event(defines.events.on_player_configured_blueprint,
 
     if (
       blueprint and
-      blueprint.type == 'blueprint' and
       blueprint.valid_for_read and
+      blueprint.type == 'blueprint' and
       blueprint_mapping and
       #blueprint_mapping == blueprint.get_blueprint_entity_count()
     ) then
